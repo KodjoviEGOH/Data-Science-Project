@@ -1,0 +1,437 @@
+---
+title: "Data Analysis on Diabetes Dataset"
+author: "Kodjovi EGOH"
+date: "2023-11-19"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+# Load the library
+library(ISLR2)
+library(MASS)
+library(caret)
+library(class)
+library(dplyr)
+library(e1071)
+library(ggplot2)
+library(pROC)
+library(tidyverse)
+```
+
+# Question 1
+
+Load the data contained in the diabetes.csv file in R.
+
+Answer:
+
+```{r}
+# Load the data
+diabetes <- read_csv("diabetes.csv", show_col_types = FALSE)
+head(diabetes)
+```
+
+The data present 768 observations and 9 variables(8 predictors and 1 response variable). The response variable Outcome is a binary variable of 2 class (1:diagnosed with diabetes, 0: not diagnosed with diabetes).
+
+# Question 2
+
+Replicate the logic used in the class7.r file to divide the data in a train,
+validation and test set. Use a 40% - 30% - 30% split.
+
+Answer:
+
+```{r}
+set.seed(0)
+# 40% of the data will go in "train".
+is_train <- as.logical(rbinom(dim(diabetes)[1], 1, 0.4))
+train_diabetes <- diabetes[is_train, ]
+# 50% of the remaining 30% will go in "validation",
+is_validation <- as.logical(rbinom(dim(diabetes)[1], 1, 0.5) * !is_train)
+validation_diabetes <- diabetes[is_validation, ]
+# The remaining 50% of the 30% will go in "test".
+test_diabetes <- diabetes[!(is_train | is_validation), ]
+
+
+cat("The dimension of train_diabetes is", paste(dim(train_diabetes), collapse = "x"), "\n")
+cat("The dimension of validation_diabetes is", paste(dim(validation_diabetes), collapse = "x"), "\n")
+cat("The dimension of test_diabetes is", paste(dim(test_diabetes), collapse = "x"), "\n")
+
+```
+
+# Question 3
+
+Using all available predictors, fit to the training set:
+• a classifier based on logistic regression
+• an LDA classifier
+• a QDA classifier
+• a Naive Bayes classifier.
+
+Answer:
+
+# Logistic regression
+
+```{r}
+# Logistic regression
+
+logistic_diabetes <- glm(Outcome ~ ., family = "binomial", data = train_diabetes)
+summary(logistic_diabetes)
+```
+
+# LDA Classifier
+
+```{r}
+# LDA
+lda_diabetes <- lda(Outcome ~ ., data = train_diabetes)
+lda_diabetes
+```
+
+# QDA Classifier
+
+```{r}
+# QDA
+qda_diabetes <- qda(Outcome ~ ., data = train_diabetes)
+qda_diabetes
+```
+
+# Naive Bayes Classifier
+
+```{r}
+# Naive Bayes
+nb_diabetes <- naiveBayes(Outcome ~ ., data = train_diabetes)
+nb_diabetes
+```
+
+# Question 4
+
+A group of physician asks you to produce a classifier that achieves 85% Sensitivity
+when used to test new Pima Indian female patients for diabetes. Using
+the validation set
+• plot the ROC curves for the models you built
+• use the roc function of the pROC library to find - for each of the models
+you built - the largest threshold t that makes your model achieve at least
+90% Sensitivity (just in case, we build some extra margin here to stay
+a little conservative and make it more likely that we can hit the target
+Sensitivity goal)
+• which model performs best (i.e., achieves the largest Specificity) under
+these conditions?
+
+Answer:
+
+
+# Plot the ROC curves for the models
+
+```{r}
+# Roc Curves 
+
+plot.roc(
+  validation_diabetes$Outcome,
+  predict(logistic_diabetes, validation_diabetes, type = "response"),
+  col = "black",
+)
+plot.roc(
+  validation_diabetes$Outcome,
+  predict(lda_diabetes, validation_diabetes)$posterior[, 2],
+  col = "blue",
+  add = TRUE,
+)
+plot.roc(
+  validation_diabetes$Outcome,
+  predict(qda_diabetes, validation_diabetes)$posterior[, 2],
+  col = "red",
+  add = TRUE,
+)
+plot.roc(
+  validation_diabetes$Outcome,
+  predict(nb_diabetes, validation_diabetes, type = "raw")[, 2],
+  col = "green",
+  add = TRUE,
+)
+
+legend("bottomright", legend = c("Logistic", "LDA", "QDA", "Naive Bayes"), col = c("black", "blue", "red", "green"), lty = 1)
+
+
+```
+
+Looking at the combined plot (logistic regression, LDA, QDa and Naive Bayes), we can noticed that the model LDA is the one that perform best among the models.LDA curve (in blue) at the beginning performs at the same level as the logistic curve (in black) but from 0.58 specificity we can see on the plot that LDA starts performing better than the logistic.
+
+# Find the largest specificity
+
+```{r}
+#Logistic regression
+# set target sensitivity
+target_sensitivity <- 0.90
+# calculate the ROC curve
+logistic_diabetes_roc <- roc(
+  validation_diabetes$Outcome,
+  predict(logistic_diabetes, validation_diabetes, type = "response")
+)
+# find the largest threshold t that achieves the target sensitivity
+logistic_diabetes_roc_index <- (
+  which.max(logistic_diabetes_roc$sensitivities < target_sensitivity) - 1
+)
+logistic_diabetes_t <- logistic_diabetes_roc$threshold[
+  logistic_diabetes_roc_index
+]
+# find the specificity of the model at this threshold
+logistic_diabetes_roc$specificities[logistic_diabetes_roc_index]
+  
+```
+
+The specificity of the logistic regression is 0.58
+
+```{r}
+#LDA
+
+# calculate the ROC curve
+target_sensitivity <- 0.90
+lda_diabetes_roc <- roc(
+  validation_diabetes$Outcome,
+  predict(lda_diabetes, validation_diabetes)$posterior[, 2]
+)
+# find the largest threshold t that achieves the target sensitivity
+lda_diabetes_roc_index <- (
+  which.max(lda_diabetes_roc$sensitivities < target_sensitivity) - 1
+)
+lda_diabetes_t <- lda_diabetes_roc$threshold[
+  lda_diabetes_roc_index
+]
+# find the specificity of the model at this threshold
+lda_diabetes_roc$specificities[lda_diabetes_roc_index]
+
+```
+
+The specificity of the LDA model is approximately equal to 0.58
+
+```{r}
+#ROC QDA
+
+# calculate the ROC curve
+target_sensitivity <- 0.90
+qda_diabetes_roc <- roc(
+  validation_diabetes$Outcome,
+  predict(qda_diabetes, validation_diabetes)$posterior[, 2]
+)
+# find the largest threshold t that achieves the target sensitivity
+qda_diabetes_roc_index <- (
+  which.max(qda_diabetes_roc$sensitivities < target_sensitivity) - 1
+)
+qda_diabetes_t <- qda_diabetes_roc$threshold[
+  qda_diabetes_roc_index
+]
+# find the specificity of the model at this threshold
+qda_diabetes_roc$specificities[qda_diabetes_roc_index]
+```
+
+The specificity of the qda model is 0.53
+
+```{r}
+#ROC Naive Bayes
+
+# calculate the ROC curve
+target_sensitivity <- 0.90
+nb_diabetes_roc <- roc(
+  validation_diabetes$Outcome,
+  predict(nb_diabetes, validation_diabetes, type = "raw")[, 2]
+)
+# find the largest threshold t that achieves the target sensitivity
+nb_diabetes_roc_index <- (
+  which.max(nb_diabetes_roc$sensitivities < target_sensitivity) - 1
+)
+nb_diabetes_t <- nb_diabetes_roc$threshold[
+  nb_diabetes_roc_index
+]
+# find the specificity of the model at this threshold
+nb_diabetes_roc$specificities[nb_diabetes_roc_index]
+```
+
+The specificity of the naive bayes model is 0.51
+
+
+LDA performs best than the other models. It has the largest specificity 0.59
+
+
+# Question 5
+
+How different are the ROC curves of the classifier obtained by means of logistic
+regression and of the LDA classifier? Are you surprised by this result? Explain.
+
+Answer:
+
+The ROC curves of the classifier logistic regression and the LDA classifier show on the plot a slight difference. Both curve where moving together until from the sensitivity 0.58 LDA perform a better than the logistic regression. I am not surprise by the result because The specificity for logistic we have computed is 0.58 and for LDA we have 0.5867.
+
+
+# Question 6
+
+Evaluate the winner model of Question 4 on the test set using the confusionMatrix
+function. You will need to use the threshold that you computed for this model
+in Question 4. Does this model seem to satisfy the Sensitivity requirement that
+the physicians shared with you?
+
+Answer:
+
+```{r}
+# Threshold
+t <- 0.2670433
+# Convert predictions to a factor
+predictions <- as.factor(ifelse(predict(lda_diabetes, test_diabetes)$posterior[, 2] > t, 1, 0))
+
+# Convert test_diabetes$Outcome to a factor
+test_diabetes$Outcome <- as.factor(test_diabetes$Outcome)
+
+# Ensure both factors have the same levels
+levels(predictions) <- levels(test_diabetes$Outcome)
+
+# Create the confusion matrix
+confusionMatrix(
+  predictions,
+  test_diabetes$Outcome,
+  positive = "1",
+  mode = "everything"
+)
+
+```
+
+The winner model in question 4 is LDA. The LDA model sensitivity after evaluation is close to 86%.This model does satisfy the 85% sensitivity requirement that the physicians wanted to achieve.
+
+# Question 7
+
+What is your best estimate about the Specificity that your model will achieve
+on future patients?
+
+Answer:
+
+The best estimate about the specificity that the model will achieve on future patients is 65%
+
+# Question 8
+
+Fit a knn classifier to the training data and tune the parameter k of your knn
+classifier using the validation set in such a way that k maximizes the Sensitivity
+of the classifier on the validation set. You can look back at the class7.r file
+that we discussed in class and adapt the code from there.
+
+Answer:
+
+```{r}
+# Here is a fully worked out example using k-nearest neighbors.
+set.seed(0)
+# First, we need to standardize the predictors.
+standardize <- function(x, mean, sd) {
+  return((x - mean) / sd)
+}
+
+quant_pred_names <- c("Pregnancies", "Glucose","BloodPressure","SkinThickness","Insulin",
+                      "BMI", "DiabetesPedigreeFunction", "Age")
+# Means and standard deviations computed on the training data.
+mean_train <- sapply(train_diabetes[quant_pred_names], mean)
+sd_train <- sapply(train_diabetes[quant_pred_names], sd)
+
+
+train_diabetes_std <- train_diabetes
+validation_diabetes_std <- validation_diabetes
+test_diabetes_std <- test_diabetes
+
+train_diabetes_std[quant_pred_names] <- mapply(
+  standardize,
+  train_diabetes_std[quant_pred_names],
+  mean = mean_train,
+  sd = sd_train
+)
+validation_diabetes_std[quant_pred_names] <- mapply(
+  standardize,
+  validation_diabetes_std[quant_pred_names],
+  mean = mean_train,
+  sd = sd_train
+)
+test_diabetes_std[quant_pred_names] <- mapply(
+  standardize,
+  test_diabetes_std[quant_pred_names],
+  mean = mean_train,
+  sd = sd_train
+)
+
+# We will optimize our knn model with respect to the F1 score.
+k_candidates <- 2:75
+knn_models <- list()
+knn_models_performance <- list()
+performance_metric <- "Sensitivity"
+
+for (k in k_candidates) {
+  model <- knn(
+    train_diabetes_std[quant_pred_names],
+    validation_diabetes_std[quant_pred_names],
+    train_diabetes_std$Outcome,
+    k = k
+  )
+  performance <- confusionMatrix(
+    model,
+    as.factor(validation_diabetes_std$Outcome),
+    positive = "1",
+    mode = "everything"
+  )$byClass[performance_metric]
+  knn_models <- append(knn_models, model)
+  knn_models_performance <- append(knn_models_performance, performance)
+}
+
+# Here is the plot showing the results and the best value of k.
+plot(k_candidates, knn_models_performance, type = "b", pch = 16)
+best_index <- which.max(knn_models_performance)
+best_k <- k_candidates[best_index]
+segments(
+  best_k,
+  0,
+  best_k,
+  knn_models_performance[[best_index]],
+  col = "blue"
+)
+```
+
+According the knn classifier plot, the k that maximize the sensitivity is 8 
+
+# Question 9
+
+What is the best value of k on these data based on your tuning?
+
+Answer:
+
+```{r}
+# Print the best k
+ best_k
+```
+
+The best k that maximize the sensitivity is 8
+
+# Question 10
+
+Evaluate the knn model on the test set using the confusionMatrix function.
+Does this knn model perform better or worse than the winner model of Question
+4? Which model will you share with the physician to help them diagnose
+diabetes on future female Pima Indian patients?
+
+Answer:
+
+
+```{r}
+
+# Let's fit our best model.
+knn_diabetes_best <- knn(
+  train_diabetes_std[quant_pred_names],
+  test_diabetes_std[quant_pred_names],
+  train_diabetes_std$Outcome,
+  k = best_k
+)
+
+
+confusionMatrix(
+  knn_diabetes_best,
+  as.factor(test_diabetes_std$Outcome),
+  positive = "1",
+  mode = "everything"
+)
+
+
+```
+
+
+The knn model perform less than the winner model LDA because it has the lowest sensitivity which is approximately equal to 53% compare to the LDA which has the sensitivity close to 86%. For this purpose, i will share LDA model with the physician to help them diagnose diabetes on future female Pima Indian patients.
+
+
+
